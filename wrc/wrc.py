@@ -1,3 +1,4 @@
+import pathlib
 import urllib.request
 import urllib.error
 import argparse
@@ -295,6 +296,36 @@ def states():
 
     handle_errors_and_warnings(errors, warnings)
 
+def merge_translations(options):
+
+    print("Merging Markdown files.")
+    input_dir = pathlib.Path(options.input)
+    if not input_dir.is_dir():
+        print("Input is not a directory.")
+        sys.exit(1)
+
+    errors = []
+    warnings = []
+
+    for dir_entry in input_dir.iterdir():
+        if not dir_entry.is_dir():
+            continue
+
+        regulations = dir_entry.with_suffix("/" + REGULATIONS_FILENAME)
+        guidelines = dir_entry.with_suffix("/" + GUIDELINES_FILENAME)
+        if not regulations.is_file() or not guidelines.is_file():
+            continue
+
+        output_file = str(dir_entry.with_suffix("/wca-regulations-merged.md"))
+        errs, warns = generate(WCADocumentHtmlToPdf,
+                                    (regulations, guidelines),
+                                    [output_file],
+                                    options, parse_regulations_guidelines,
+                                    merged=True)
+        errors.extend(errs)
+        warnings.extend(warns)
+
+    return errors, warnings
 
 def run():
     argparser = argparse.ArgumentParser()
@@ -314,7 +345,8 @@ def run():
         print("Nothing to do, exiting...")
         sys.exit(0)
 
-    input_regulations, input_guidelines = files_from_dir(options.input)
+    if options.target != "md":
+        input_regulations, input_guidelines = files_from_dir(options.input)
 
     errors = []
     warnings = []
@@ -356,6 +388,8 @@ def run():
             if options.diff:
                 print("Checking reference file(s) for diff")
                 errors, warnings = generate_diff(astreg, astguide, options)
+    elif options.target == "md":
+        errors, warnings = merge_translations(options)
 
     handle_errors_and_warnings(errors, warnings)
 
