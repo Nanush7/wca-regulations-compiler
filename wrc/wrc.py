@@ -318,6 +318,9 @@ def merge_translations(options):
             continue
 
         output_file = str(dir_entry / "wca-regulations-merged.md")
+        output_dir = "./build" / dir_entry
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         errs, warns = generate(WCADocumentMarkdown,
                                (regulations, guidelines),
                                [output_file],
