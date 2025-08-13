@@ -1,18 +1,18 @@
 import re
-from wrc.sema.ast import Ruleset, Rule, LabelDecl
+from wrc.sema.ast import Ruleset
 from wrc.codegen.cg import CGDocument
 
-H2 = '## {title}\n'
-H3 = '### {title}\n'
+H2 = '\n## {title}\n'
+H3 = '\n### {title}\n'
 TITLE = '# <wca-title>{title}\n'
-VERSION = '<version>{version}\n'
+VERSION = '<version>{version}'
 
 def special_links_replace(text, urls):
-    '''
+    """
     Replace simplified Regulations and Guidelines links into actual links.
     'urls' dictionary is expected to provide actual links to the targeted
     Regulations and Guidelines, as well as to the PDF file.
-    '''
+    """
     match_number = r'([A-Za-z0-9]+)' + r'(\+*)'
     reference_list = [(r'regulations:article:' + match_number, urls['regulations']),
                       (r'regulations:regulation:' + match_number, urls['regulations']),
@@ -33,11 +33,11 @@ def special_links_replace(text, urls):
     return retval
 
 def list2html(text):
-    '''
+    """
     Very simple replacement for lists, no nesting, not even two lists in the
     same 'text'... (yet sufficient for the current regulations)
     Assumes list is in a paragraph.
-    '''
+    """
     match = r'- (.+)\n'
     replace = r'<li>\1</li>\n'
     text = re.sub(match, replace, text)
@@ -48,13 +48,13 @@ def list2html(text):
     return '</li></ul><p>'.join(tmp)
 
 def link2html(text):
-    ''' Turns md links to html '''
+    """ Turns md links to html """
     match = r'\[([^\]]+)\]\(([^)]+)\)'
     replace = r'<a href="\2">\1</a>'
     return re.sub(match, replace, text)
 
 def simple_md2html(text, urls):
-    ''' Convert a text from md to html '''
+    """ Convert a text from md to html """
     retval = special_links_replace(text, urls)
     # Create a par break for double newlines
     retval = re.sub(r'\n\n', r'</p><p>', retval)
@@ -66,98 +66,86 @@ def simple_md2html(text, urls):
     return link2html(retval)
 
 
-class WCADocumentMarkDown(CGDocument):
-    name = "MarkDown"
+class WCADocumentMarkdown(CGDocument):
+    name = "Markdown"
 
     def __init__(self, versionhash, language, pdf):
-        super(WCADocumentMarkDown, self).__init__(str)
+        super(WCADocumentMarkdown, self).__init__(str)
         self.regset = set()
         self.urls = {'regulations': './', 'guidelines': './', 'pdf': pdf}
         self.language = language
-        self.harticle = "\n\n## <article-{num}><{name1}><{name2}> {name}{sep}{title}\n"
-        self.guideline = "- {i}) [{label}] {text}"
-        self.regulation = "- {i}) {text}"
+        self.harticle = "\n\n## <article-{num}><{new}><{old}> {name}{sep}{title}\n\n"
+        self.guideline = "- {i}) [{label}] {text}\n"
+        self.regulation = "- {i}) {text}\n"
+        self.label = "- <label>[{name}] {text}\n"
         self.postreg = '\n'
-
-    # def generate_ul(self, a_list):
-    #     """Determines if we should generate th 'ul' around the list 'a_list'"""
-    #     return len(a_list) > 0 and (isinstance(a_list[0], Rule) or
-    #                                 isinstance(a_list[0], LabelDecl))
+        self.extra_indent = 0
 
     def visitWCADocument(self, document):
-        self.codegen += TITLE.format(title=document.title)
-        self.codegen += VERSION.format(version=document.version)
+        self.codegen += TITLE.format(title=document.title) + "\n"
+        self.codegen += VERSION.format(version=document.version) + "\n\n"
 
         retval = [self.visit(s) for s in document.sections]
 
-        # FIXME do we really need ascii html entities instead of plain utf8 ?
-        # self.codegen = self.codegen.encode('ascii', 'xmlcharrefreplace').decode('utf-8')
         return retval.count(False) == 0
 
     def visitlist(self, o):
-        # TODO Indent.
-        retval = super(WCADocumentMarkDown, self).visitlist(o)
-        return retval
+        return super(WCADocumentMarkdown, self).visitlist(o)
 
     def visitstr(self, u):
-        # if len(u) > 0:
-        #     self.codegen += "<p>" + self.md2html(u) + "</p>\n"
+        self.codegen += u
         return True
 
     def visitTableOfContent(self, toc):
-        self.codegen += "NOTES HERE, CHECK APPROPRIATE FORMAT (REMOVE THIS LINE)"
-        self.codegen += "<table-of-contents>"
+        self.codegen += f"\n\n## {toc.title}\n\n{toc.intro}\n<table-of-contents>\n"
         return True
 
     def visitSection(self, section):
-        return super(WCADocumentMarkDown, self).visitSection(section)
+        self.codegen += H2.format(title=section.title)
+        return super(WCADocumentMarkdown, self).visitSection(section)
 
     def visitArticle(self, article):
-        # "\n\n## <article-{num}><{name1}><{name2}> {name}{sep}{title}\n"
-        self.codegen += self.harticle.format(anchor=article.number,
+        if len(article.number) > 1:
+            self.extra_indent = 1
+        else:
+            self.extra_indent = 0
+
+        self.codegen += self.harticle.format(num=article.number,
                                              old=article.oldtag,
                                              new=article.newtag,
                                              name=article.name,
                                              title=article.title,
                                              sep=article.sep)
-        retval = super(WCADocumentHtml, self).visit(article.intro)
-        retval = retval and super(WCADocumentHtml, self).visit(article.content)
+        retval = super(WCADocumentMarkdown, self).visit(article.intro)
+        retval = retval and super(WCADocumentMarkdown, self).visit(article.content)
         return retval
 
     def visitSubsection(self, subsection):
         if self.shouldEmitSubsection(self.language, subsection.title):
-            self.codegen += H3.format(anchor=anchorizer(subsection.title),
-                                      title=subsection.title)
-            return super(WCADocumentHtml, self).visitSubsection(subsection)
+            self.codegen += H3.format(title=subsection.title)
+            return super(WCADocumentMarkdown, self).visitSubsection(subsection)
         return True
 
     def visitRegulation(self, reg):
+        # if reg.
+        extra_indent = 0
+        self.codegen += "    " * max(0, len(reg.number) - 2 - self.extra_indent)
         self.codegen += self.regulation.format(i=reg.number,
-                                               text=self.md2html(reg.text))
-        retval = super(WCADocumentHtml, self).visitRegulation(reg)
-        self.codegen += self.postreg
+                                               text=reg.text)
+        retval = super(WCADocumentMarkdown, self).visitRegulation(reg)
         return retval
-
 
     def visitLabelDecl(self, decl):
         self.codegen += self.label.format(name=decl.name, text=decl.text)
         return True
 
     def visitGuideline(self, guide):
-        reg = guide.regname
-        linked = reg in self.regset
-        label_class = "linked" if linked else ""
-        link_attr = 'href="%s#%s"' % (self.urls['regulations'], reg)
-        anchor_attr = 'id="#%s"' % guide.number
-        attr = link_attr if linked else anchor_attr
-
+        self.codegen += "    " * max(0, len(guide.number.split("+", 1)[0]) - 2 - self.extra_indent)
         self.codegen += self.guideline.format(i=guide.number,
-                                              text=self.md2html(guide.text),
-                                              label=guide.labelname,
-                                              linked=label_class,
-                                              attr=attr)
-        return super(WCADocumentHtml, self).visitGuideline(guide)
+                                              text=guide.text,
+                                              label=guide.labelname)
+        return super(WCADocumentMarkdown, self).visitGuideline(guide)
 
     def emit(self, ast_reg, ast_guide):
         self.regset = Ruleset().get(ast_reg)
-        return super(WCADocumentHtml, self).emit(ast_reg, ast_guide)
+        return super(WCADocumentMarkdown, self).emit(ast_reg, ast_guide)

@@ -11,6 +11,7 @@ from .parse.parser import WCAParser
 from .sema.ast import WCARegulations, WCAGuidelines, WCAStates, Ruleset
 from .codegen.cghtml import WCADocumentHtml
 from .codegen.cghtmltopdf import WCADocumentHtmlToPdf
+from .codegen.cgmarkdown import WCADocumentMarkdown
 from .codegen.cgjson import WCADocumentJSON
 from .codegen.merger import merge_ast
 from .version import __version__
@@ -311,17 +312,17 @@ def merge_translations(options):
         if not dir_entry.is_dir():
             continue
 
-        regulations = dir_entry.with_suffix("/" + REGULATIONS_FILENAME)
-        guidelines = dir_entry.with_suffix("/" + GUIDELINES_FILENAME)
+        regulations = dir_entry / REGULATIONS_FILENAME
+        guidelines = dir_entry / GUIDELINES_FILENAME
         if not regulations.is_file() or not guidelines.is_file():
             continue
 
-        output_file = str(dir_entry.with_suffix("/wca-regulations-merged.md"))
-        errs, warns = generate(WCADocumentHtmlToPdf,
-                                    (regulations, guidelines),
-                                    [output_file],
-                                    options, parse_regulations_guidelines,
-                                    merged=True)
+        output_file = str(dir_entry / "wca-regulations-merged.md")
+        errs, warns = generate(WCADocumentMarkdown,
+                               (regulations, guidelines),
+                               [output_file],
+                               options, parse_regulations_guidelines,
+                               merged=True)
         errors.extend(errs)
         warnings.extend(warns)
 
@@ -331,7 +332,7 @@ def run():
     argparser = argparse.ArgumentParser()
     action_group = argparser.add_mutually_exclusive_group()
     action_group.add_argument('--target', help='Select target output kind',
-                              choices=['latex', 'pdf', 'html', 'check', 'json'])
+                              choices=['latex', 'pdf', 'html', 'check', 'json', 'md'])
     action_group.add_argument('--diff', help='Diff against the specified file')
     action_group.add_argument('-v', '--version', action='version',
                               version=__version__)
